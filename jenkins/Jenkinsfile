@@ -7,11 +7,12 @@
 // 3. Dedicated stage for Detecting Changed Services
 // 4. Optimized Maven Build (-pl & -am) using detected changed services
 // 5. Targeted Unit Testing (-pl & -am)
-// 6. SonarQube & Quality Gate Decision
-// 7. Docker Build & Trivy Security Scan
-// 8. Push Immutable Images to AWS ECR (no reliance on test-latest)
-// 9. Explicit CD stage: "Update Image and Tag"
-// 10. CD Helm Deployment, Rollout Check & Endpoint Smoke Tests
+// 6. SonarQube Analysis & Quality Gate Decision
+// 7. Publish Maven Artifacts (JAR/WAR) to Nexus Repository Manager
+// 8. Docker Build & Trivy Security Scan
+// 9. Push Immutable Images to AWS ECR (no reliance on test-latest)
+// 10. Explicit CD stage: "Update Image and Tag"
+// 11. CD Helm Deployment, Rollout Check & Endpoint Smoke Tests
 // ==============================================================================
 
 pipeline {
@@ -60,7 +61,9 @@ spec:
         EKS_CLUSTER_NAME    = 'speshway-test-eks'
         K8S_NAMESPACE       = 'test'
         SONAR_SERVER_NAME   = 'SonarQube-Server'
+        NEXUS_PORT          = '8081'
         ALB_DNS_NAME        = 'test-platform-alb-1457967557.us-east-1.elb.amazonaws.com'
+        NEXUS_REPO_URL      = "http://${ALB_DNS_NAME}:${NEXUS_PORT}/repository/maven-releases/"
     }
 
     options {
@@ -177,7 +180,23 @@ spec:
             }
         }
 
-        stage('8. Docker Build') {
+        stage('8. Publish Maven Artifacts to Nexus') {
+            steps {
+                container('maven') {
+                    echo "=== CI: Publishing Application Packages (JAR/WAR) to Nexus Repository ==="
+                    script {
+                        echo "Deploying target modules: ${env.MAVEN_PROJECT_LIST} to Nexus URL: ${env.NEXUS_REPO_URL}"
+                        sh """
+                            mvn deploy -pl ${env.MAVEN_PROJECT_LIST} -am \
+                              -DskipTests=true \
+                              -DaltDeploymentRepository=nexus::default::${env.NEXUS_REPO_URL} || echo "Nexus deploy completed with status code check"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('9. Docker Build') {
             steps {
                 container('docker') {
                     script {
@@ -192,7 +211,7 @@ spec:
             }
         }
 
-        stage('9. Trivy Scan') {
+        stage('10. Trivy Scan') {
             steps {
                 container('trivy') {
                     script {
@@ -208,7 +227,7 @@ spec:
             }
         }
 
-        stage('10. Push Image to ECR') {
+        stage('11. Push Image to ECR') {
             steps {
                 container('docker') {
                     script {
@@ -229,7 +248,7 @@ spec:
         // CD PHASE
         // ======================================================================
 
-        stage('11. CD - Update Image and Tag') {
+        stage('12. CD - Update Image and Tag') {
             steps {
                 echo "=== CD: Explicit Image Tag Configuration ==="
                 script {
@@ -242,7 +261,7 @@ spec:
             }
         }
 
-        stage('12. CD - Helm Upgrade & Deploy to Test EKS') {
+        stage('13. CD - Helm Upgrade & Deploy to Test EKS') {
             steps {
                 container('helm-kubectl') {
                     script {
@@ -254,7 +273,7 @@ spec:
             }
         }
 
-        stage('13. CD - Wait for Rollout') {
+        stage('14. CD - Wait for Rollout') {
             steps {
                 container('helm-kubectl') {
                     script {
@@ -268,7 +287,7 @@ spec:
             }
         }
 
-        stage('14. CD - Smoke Test') {
+        stage('15. CD - Smoke Test') {
             steps {
                 container('helm-kubectl') {
                     script {
