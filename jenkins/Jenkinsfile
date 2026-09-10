@@ -1,15 +1,23 @@
 // ==============================================================================
 // SPESHWAY PRODUCTION JENKINSFILE - TEST ENVIRONMENT
 // MicroserviceDemo Repository: https://github.com/sannaielamounika/microservicedemo
-// Compatibility Fixes:
-// 1. Replaced agent kubernetes block with universal agent any for standalone & EC2 agents
-// 2. Removed ansiColor option to resolve plugin compilation error
+// Features & Tooling:
+// 1. Explicit PATH set to /usr/local/bin:/usr/bin:/bin to locate installed tools (mvn, kubectl, helm, trivy, docker, aws)
+// 2. Dynamic IMAGE_TAG generation using git rev-parse
+// 3. Service change detection
+// 4. Targeted Maven compile & test (-pl & -am)
+// 5. SonarQube & Quality Gate Decision
+// 6. Publish Maven Artifacts to Nexus Repository
+// 7. Docker Build & Trivy Vulnerability Scanning
+// 8. Push Immutable Tags to AWS ECR
+// 9. CD Helm Deployment to Test EKS, Rollout Check & Endpoint Smoke Tests
 // ==============================================================================
 
 pipeline {
     agent any
 
     environment {
+        PATH                = "/usr/local/bin:/usr/bin:/bin:${env.PATH}"
         AWS_REGION          = 'us-east-1'
         AWS_ACCOUNT_ID      = '475345973578'
         ECR_REGISTRY        = "475345973578.dkr.ecr.us-east-1.amazonaws.com"
@@ -48,16 +56,25 @@ pipeline {
 
         stage('2. Verify Agent Tooling') {
             steps {
-                echo "=== CI: Verifying CLI Tooling in Agent (aws, kubectl, helm) ==="
+                echo "=== CI: Verifying Installed Tools in Agent (aws, mvn, kubectl, helm, trivy, docker) ==="
                 sh '''
                     echo "Checking AWS CLI version..."
-                    aws --version || echo "AWS CLI ready"
+                    aws --version
+                    
+                    echo "Checking Maven version..."
+                    mvn -version
                     
                     echo "Checking Kubectl client version..."
-                    kubectl version --client || echo "Kubectl client ready"
+                    kubectl version --client
                     
                     echo "Checking Helm version..."
-                    helm version || echo "Helm ready"
+                    helm version
+                    
+                    echo "Checking Trivy version..."
+                    trivy --version
+                    
+                    echo "Checking Docker version..."
+                    docker --version
                 '''
             }
         }
