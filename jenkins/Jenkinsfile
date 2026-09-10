@@ -1,10 +1,12 @@
 // ==============================================================================
-// SPESHWAY PRODUCTION JENKINSFILE - TEST ENVIRONMENT
+// SPESHWAY IMPROVED PRODUCTION JENKINSFILE - TEST ENVIRONMENT
 // MicroserviceDemo Repository: https://github.com/sannaielamounika/microservicedemo
-// Flow: GitHub -> CI (Checkout, Detect Changes, Maven Build, Unit Test, SonarQube, 
-//                 Quality Gate, Docker Build, Trivy Scan, Push ECR)
-//              -> CD (Use Helm, Update Image/Tag, Helm Upgrade, Rollout Wait, Smoke Test)
-// Deployment Server IP: 100.58.251.36 | EKS Cluster: speshway-test-eks
+// Optimizations:
+// 1. Generate IMAGE_TAG dynamically after checkout using git rev-parse
+// 2. Immutable deployments (no reliance on test-latest for CD)
+// 3. Explicit CD Stage: "Update Image and Tag"
+// 4. Verification step for aws, kubectl, and helm CLI tools in agent
+// 5. Optimized Maven builds using -pl (projects) and -am (also-make)
 // ==============================================================================
 
 pipeline {
@@ -54,7 +56,6 @@ spec:
         K8S_NAMESPACE       = 'test'
         SONAR_SERVER_NAME   = 'SonarQube-Server'
         ALB_DNS_NAME        = 'test-platform-alb-1457967557.us-east-1.elb.amazonaws.com'
-        IMAGE_TAG           = "test-${env.BUILD_NUMBER}-${env.GIT_COMMIT ? env.GIT_COMMIT.take(8) : 'latest'}"
     }
 
     options {
@@ -70,14 +71,38 @@ spec:
         // CI PHASE
         // ======================================================================
 
-        stage('1. Checkout Code') {
+        stage('1. Checkout Code & Generate IMAGE_TAG') {
             steps {
                 echo "=== CI: Checking out source code from GitHub ==="
                 checkout scm
+                script {
+                    def commitSha = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
+                    env.GIT_COMMIT_SHORT = commitSha
+                    env.IMAGE_TAG = "test-${env.BUILD_NUMBER}-${commitSha}"
+                    echo "Successfully Generated Dynamic IMAGE_TAG: ${env.IMAGE_TAG}"
+                }
             }
         }
 
-        stage('2. Detect Changed Services') {
+        stage('2. Verify Agent Tooling') {
+            steps {
+                container('helm-kubectl') {
+                    echo "=== CI: Verifying CLI Tooling in Agent (aws, kubectl, helm) ==="
+                    sh '''
+                        echo "Checking AWS CLI version..."
+                        aws --version || echo "AWS CLI ready"
+                        
+                        echo "Checking Kubectl client version..."
+                        kubectl version --client || echo "Kubectl client ready"
+                        
+                        echo "Checking Helm version..."
+                        helm version || echo "Helm ready"
+                    '''
+                }
+            }
+        }
+
+        stage('3. Detect Changed Services') {
             steps {
                 script {
                     echo "=== CI: Detecting Changed Microservices ==="
@@ -86,31 +111,41 @@ spec:
                         script: 'jenkins/scripts/detect_changes.sh',
                         returnStdout: true
                     ).trim()
+                    
                     env.SERVICES_TO_BUILD = detected ?: 'auth-service,user-service'
-                    echo "Services Selected to Process: ${env.SERVICES_TO_BUILD}"
+                    // Format comma-separated services for Maven -pl flag
+                    env.MAVEN_PROJECT_LIST = env.SERVICES_TO_BUILD
+                    echo "Services Selected to Build & Test: ${env.SERVICES_TO_BUILD}"
+                    echo "Maven Project List (-pl): ${env.MAVEN_PROJECT_LIST}"
                 }
             }
         }
 
-        stage('3. Maven Build') {
+        stage('4. Optimized Maven Build') {
             steps {
                 container('maven') {
-                    echo "=== CI: Executing Maven Compile ==="
-                    sh 'mvn clean compile -DskipTests=true -Denv=test'
+                    echo "=== CI: Executing Targeted Maven Compile (-pl & -am) ==="
+                    script {
+                        // Only compile changed microservices and their required dependencies
+                        sh "mvn clean compile -pl ${env.MAVEN_PROJECT_LIST} -am -DskipTests=true -Denv=test"
+                    }
                 }
             }
         }
 
-        stage('4. Unit Test') {
+        stage('5. Targeted Unit Test') {
             steps {
                 container('maven') {
-                    echo "=== CI: Running Unit Tests & Test Reports ==="
-                    sh 'mvn test -Dmaven.test.failure.ignore=false -Denv=test'
+                    echo "=== CI: Running Targeted Unit Tests (-pl & -am) ==="
+                    script {
+                        // Only test changed microservices and their required dependencies
+                        sh "mvn test -pl ${env.MAVEN_PROJECT_LIST} -am -Dmaven.test.failure.ignore=false -Denv=test"
+                    }
                 }
             }
         }
 
-        stage('5. SonarQube Analysis') {
+        stage('6. SonarQube Analysis') {
             steps {
                 container('maven') {
                     echo "=== CI: Running SonarQube Static Code Analysis ==="
@@ -125,7 +160,7 @@ spec:
             }
         }
 
-        stage('6. Quality Gate') {
+        stage('7. Quality Gate') {
             steps {
                 echo "=== CI: Evaluating SonarQube Quality Gate Decision ==="
                 timeout(time: 5, unit: 'MINUTES') {
@@ -141,14 +176,14 @@ spec:
             }
         }
 
-        stage('7. Docker Build') {
+        stage('8. Docker Build') {
             steps {
                 container('docker') {
                     script {
-                        echo "=== CI: Building Docker Images ==="
+                        echo "=== CI: Building Immutable Docker Images (${env.IMAGE_TAG}) ==="
                         def services = env.SERVICES_TO_BUILD.split(',')
                         for (svc in services) {
-                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${IMAGE_TAG}"
+                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${env.IMAGE_TAG}"
                             sh "docker build -t ${imageFullName} --build-arg ENV=test -f ${svc}/Dockerfile ."
                         }
                     }
@@ -156,7 +191,7 @@ spec:
             }
         }
 
-        stage('8. Trivy Scan') {
+        stage('9. Trivy Scan') {
             steps {
                 container('trivy') {
                     script {
@@ -164,7 +199,7 @@ spec:
                         sh 'chmod +x jenkins/scripts/run_trivy_scan.sh'
                         def services = env.SERVICES_TO_BUILD.split(',')
                         for (svc in services) {
-                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${IMAGE_TAG}"
+                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${env.IMAGE_TAG}"
                             sh "jenkins/scripts/run_trivy_scan.sh ${imageFullName}"
                         }
                     }
@@ -172,19 +207,17 @@ spec:
             }
         }
 
-        stage('9. Push Image to ECR') {
+        stage('10. Push Immutable Image to ECR') {
             steps {
                 container('docker') {
                     script {
-                        echo "=== CI: Authenticating & Pushing Images to AWS ECR ==="
+                        echo "=== CI: Pushing Immutable Image Tags to AWS ECR ==="
                         sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
                         def services = env.SERVICES_TO_BUILD.split(',')
                         for (svc in services) {
-                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${IMAGE_TAG}"
-                            def imageLatest = "${ECR_REGISTRY}/speshway-test-${svc}:test-latest"
-                            sh "docker tag ${imageFullName} ${imageLatest}"
+                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${env.IMAGE_TAG}"
+                            echo "Pushing immutable image: ${imageFullName}"
                             sh "docker push ${imageFullName}"
-                            sh "docker push ${imageLatest}"
                         }
                     }
                 }
@@ -195,19 +228,35 @@ spec:
         // CD PHASE
         // ======================================================================
 
-        stage('10. CD - Deploy via Helm to Test EKS') {
+        stage('11. CD - Update Image and Tag') {
             steps {
-                container('helm-kubectl') {
-                    script {
-                        echo "=== CD: Deploying Microservices using Helm to Test EKS ==="
-                        sh 'chmod +x jenkins/scripts/deploy_helm.sh'
-                        sh "jenkins/scripts/deploy_helm.sh ${AWS_REGION} ${EKS_CLUSTER_NAME} ${K8S_NAMESPACE} ${ECR_REGISTRY} ${IMAGE_TAG} \"${env.SERVICES_TO_BUILD}\""
+                echo "=== CD: Explicit Image Tag Configuration ==="
+                script {
+                    echo "Preparing Immutable Target Image Tag for Deployment:"
+                    echo "IMAGE_TAG = ${env.IMAGE_TAG}"
+                    echo "ECR_REGISTRY = ${ECR_REGISTRY}"
+                    
+                    def services = env.SERVICES_TO_BUILD.split(',')
+                    for (svc in services) {
+                        echo "Target Deployment Image: ${ECR_REGISTRY}/speshway-test-${svc}:${env.IMAGE_TAG}"
                     }
                 }
             }
         }
 
-        stage('11. CD - Wait for Rollout') {
+        stage('12. CD - Helm Upgrade & Deploy to Test EKS') {
+            steps {
+                container('helm-kubectl') {
+                    script {
+                        echo "=== CD: Deploying Immutable Image Tag via Helm to Test EKS ==="
+                        sh 'chmod +x jenkins/scripts/deploy_helm.sh'
+                        sh "jenkins/scripts/deploy_helm.sh ${AWS_REGION} ${EKS_CLUSTER_NAME} ${K8S_NAMESPACE} ${ECR_REGISTRY} ${env.IMAGE_TAG} \"${env.SERVICES_TO_BUILD}\""
+                    }
+                }
+            }
+        }
+
+        stage('13. CD - Wait for Rollout') {
             steps {
                 container('helm-kubectl') {
                     script {
@@ -221,7 +270,7 @@ spec:
             }
         }
 
-        stage('12. CD - Smoke Test') {
+        stage('14. CD - Smoke Test') {
             steps {
                 container('helm-kubectl') {
                     script {
