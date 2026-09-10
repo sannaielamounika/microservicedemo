@@ -1,10 +1,15 @@
 // ==============================================================================
 // SPESHWAY PRODUCTION JENKINSFILE - TEST ENVIRONMENT
 // MicroserviceDemo Repository: https://github.com/sannaielamounika/microservicedemo
-// Compatibility Fixes:
-// 1. Direct SonarQube integration using Maven flags (-Dsonar.host.url) (No plugin dependency)
-// 2. Direct Quality Gate evaluation via SonarQube REST API (No waitForQualityGate DSL dependency)
-// 3. Universal agent any execution with explicit PATH
+// Features & Fixes:
+// 1. Full SonarQube Maven plugin coordinates (org.sonarsource.scanner.maven:sonar-maven-plugin:sonar)
+// 2. Full EKS IAM permissions (jenkins-eks-full-access inline policy on test-jenkins-role)
+// 3. Dynamic IMAGE_TAG generation using git rev-parse
+// 4. Targeted Maven compile & test (-pl & -am)
+// 5. Publish Maven Artifacts to Nexus Repository
+// 6. Docker Build & Trivy Vulnerability Scanning
+// 7. Push Immutable Tags to AWS ECR
+// 8. CD Helm Deployment to Test EKS, Rollout Check & Endpoint Smoke Tests
 // ==============================================================================
 
 pipeline {
@@ -112,7 +117,7 @@ pipeline {
             steps {
                 echo "=== CI: Running SonarQube Static Code Analysis ==="
                 sh '''
-                    mvn sonar:sonar \
+                    mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
                       -Dsonar.host.url=${SONAR_HOST_URL} \
                       -Dsonar.projectKey=speshway-microservicedemo \
                       -Dsonar.projectName="Speshway Microservices Demo" || true
