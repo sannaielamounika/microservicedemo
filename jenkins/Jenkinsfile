@@ -1,0 +1,242 @@
+// ==============================================================================
+// SPESHWAY PRODUCTION JENKINSFILE - TEST ENVIRONMENT
+// MicroserviceDemo Repository: https://github.com/sannaielamounika/microservicedemo
+// Flow: GitHub -> CI (Checkout, Detect Changes, Maven Build, Unit Test, SonarQube, 
+//                 Quality Gate, Docker Build, Trivy Scan, Push ECR)
+//              -> CD (Use Helm, Update Image/Tag, Helm Upgrade, Rollout Wait, Smoke Test)
+// Deployment Server IP: 100.58.251.36 | EKS Cluster: speshway-test-eks
+// ==============================================================================
+
+pipeline {
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    component: jenkins-pipeline-agent
+spec:
+  serviceAccountName: jenkins
+  containers:
+  - name: maven
+    image: maven:3.9-eclipse-temurin-17
+    command: ['cat']
+    tty: true
+  - name: docker
+    image: docker:24.0-cli
+    command: ['cat']
+    tty: true
+    volumeMounts:
+    - mountPath: /var/run/docker.sock
+      name: docker-sock
+  - name: trivy
+    image: aquasec/trivy:0.45.0
+    command: ['cat']
+    tty: true
+  - name: helm-kubectl
+    image: alpine/helm:3.12.0
+    command: ['cat']
+    tty: true
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+'''
+        }
+    }
+
+    environment {
+        AWS_REGION          = 'us-east-1'
+        AWS_ACCOUNT_ID      = '475345973578'
+        ECR_REGISTRY        = "475345973578.dkr.ecr.us-east-1.amazonaws.com"
+        EKS_CLUSTER_NAME    = 'speshway-test-eks'
+        K8S_NAMESPACE       = 'test'
+        SONAR_SERVER_NAME   = 'SonarQube-Server'
+        ALB_DNS_NAME        = 'test-platform-alb-1457967557.us-east-1.elb.amazonaws.com'
+        IMAGE_TAG           = "test-${env.BUILD_NUMBER}-${env.GIT_COMMIT ? env.GIT_COMMIT.take(8) : 'latest'}"
+    }
+
+    options {
+        timeout(time: 2, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+        disableConcurrentBuilds()
+        ansiColor('xterm')
+    }
+
+    stages {
+
+        // ======================================================================
+        // CI PHASE
+        // ======================================================================
+
+        stage('1. Checkout Code') {
+            steps {
+                echo "=== CI: Checking out source code from GitHub ==="
+                checkout scm
+            }
+        }
+
+        stage('2. Detect Changed Services') {
+            steps {
+                script {
+                    echo "=== CI: Detecting Changed Microservices ==="
+                    sh 'chmod +x jenkins/scripts/detect_changes.sh'
+                    def detected = sh(
+                        script: 'jenkins/scripts/detect_changes.sh',
+                        returnStdout: true
+                    ).trim()
+                    env.SERVICES_TO_BUILD = detected ?: 'auth-service,user-service'
+                    echo "Services Selected to Process: ${env.SERVICES_TO_BUILD}"
+                }
+            }
+        }
+
+        stage('3. Maven Build') {
+            steps {
+                container('maven') {
+                    echo "=== CI: Executing Maven Compile ==="
+                    sh 'mvn clean compile -DskipTests=true -Denv=test'
+                }
+            }
+        }
+
+        stage('4. Unit Test') {
+            steps {
+                container('maven') {
+                    echo "=== CI: Running Unit Tests & Test Reports ==="
+                    sh 'mvn test -Dmaven.test.failure.ignore=false -Denv=test'
+                }
+            }
+        }
+
+        stage('5. SonarQube Analysis') {
+            steps {
+                container('maven') {
+                    echo "=== CI: Running SonarQube Static Code Analysis ==="
+                    withSonarQubeEnv("${SONAR_SERVER_NAME}") {
+                        sh '''
+                            mvn sonar:sonar \
+                              -Dsonar.projectKey=speshway-microservicedemo \
+                              -Dsonar.projectName="Speshway Microservices Demo"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('6. Quality Gate') {
+            steps {
+                echo "=== CI: Evaluating SonarQube Quality Gate Decision ==="
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            error "Quality Gate Failed with status: ${qg.status}. Aborting Build."
+                        } else {
+                            echo "SonarQube Quality Gate Passed!"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('7. Docker Build') {
+            steps {
+                container('docker') {
+                    script {
+                        echo "=== CI: Building Docker Images ==="
+                        def services = env.SERVICES_TO_BUILD.split(',')
+                        for (svc in services) {
+                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${IMAGE_TAG}"
+                            sh "docker build -t ${imageFullName} --build-arg ENV=test -f ${svc}/Dockerfile ."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('8. Trivy Scan') {
+            steps {
+                container('trivy') {
+                    script {
+                        echo "=== CI: Running Trivy Security Vulnerability Scan ==="
+                        sh 'chmod +x jenkins/scripts/run_trivy_scan.sh'
+                        def services = env.SERVICES_TO_BUILD.split(',')
+                        for (svc in services) {
+                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${IMAGE_TAG}"
+                            sh "jenkins/scripts/run_trivy_scan.sh ${imageFullName}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('9. Push Image to ECR') {
+            steps {
+                container('docker') {
+                    script {
+                        echo "=== CI: Authenticating & Pushing Images to AWS ECR ==="
+                        sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
+                        def services = env.SERVICES_TO_BUILD.split(',')
+                        for (svc in services) {
+                            def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${IMAGE_TAG}"
+                            def imageLatest = "${ECR_REGISTRY}/speshway-test-${svc}:test-latest"
+                            sh "docker tag ${imageFullName} ${imageLatest}"
+                            sh "docker push ${imageFullName}"
+                            sh "docker push ${imageLatest}"
+                        }
+                    }
+                }
+            }
+        }
+
+        // ======================================================================
+        // CD PHASE
+        // ======================================================================
+
+        stage('10. CD - Deploy via Helm to Test EKS') {
+            steps {
+                container('helm-kubectl') {
+                    script {
+                        echo "=== CD: Deploying Microservices using Helm to Test EKS ==="
+                        sh 'chmod +x jenkins/scripts/deploy_helm.sh'
+                        sh "jenkins/scripts/deploy_helm.sh ${AWS_REGION} ${EKS_CLUSTER_NAME} ${K8S_NAMESPACE} ${ECR_REGISTRY} ${IMAGE_TAG} \"${env.SERVICES_TO_BUILD}\""
+                    }
+                }
+            }
+        }
+
+        stage('11. CD - Wait for Rollout') {
+            steps {
+                container('helm-kubectl') {
+                    script {
+                        echo "=== CD: Verifying Kubernetes Rollout Status ==="
+                        def services = env.SERVICES_TO_BUILD.split(',')
+                        for (svc in services) {
+                            sh "kubectl rollout status deployment/${svc} -n ${K8S_NAMESPACE} --timeout=300s"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('12. CD - Smoke Test') {
+            steps {
+                container('helm-kubectl') {
+                    script {
+                        echo "=== CD: Running Endpoint Smoke Tests on Test EKS ==="
+                        sh 'chmod +x jenkins/scripts/smoke_test.sh'
+                        sh "jenkins/scripts/smoke_test.sh http://${ALB_DNS_NAME}"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
