@@ -1,12 +1,17 @@
 // ==============================================================================
-// SPESHWAY IMPROVED PRODUCTION JENKINSFILE - TEST ENVIRONMENT
+// SPESHWAY PRODUCTION JENKINSFILE - TEST ENVIRONMENT
 // MicroserviceDemo Repository: https://github.com/sannaielamounika/microservicedemo
-// Optimizations:
+// Features:
 // 1. Generate IMAGE_TAG dynamically after checkout using git rev-parse
-// 2. Immutable deployments (no reliance on test-latest for CD)
-// 3. Explicit CD Stage: "Update Image and Tag"
-// 4. Verification step for aws, kubectl, and helm CLI tools in agent
-// 5. Optimized Maven builds using -pl (projects) and -am (also-make)
+// 2. Verify agent tooling (aws, kubectl, helm)
+// 3. Dedicated stage for Detecting Changed Services
+// 4. Optimized Maven Build (-pl & -am) using detected changed services
+// 5. Targeted Unit Testing (-pl & -am)
+// 6. SonarQube & Quality Gate Decision
+// 7. Docker Build & Trivy Security Scan
+// 8. Push Immutable Images to AWS ECR (no reliance on test-latest)
+// 9. Explicit CD stage: "Update Image and Tag"
+// 10. CD Helm Deployment, Rollout Check & Endpoint Smoke Tests
 // ==============================================================================
 
 pipeline {
@@ -113,32 +118,28 @@ spec:
                     ).trim()
                     
                     env.SERVICES_TO_BUILD = detected ?: 'auth-service,user-service'
-                    // Format comma-separated services for Maven -pl flag
                     env.MAVEN_PROJECT_LIST = env.SERVICES_TO_BUILD
-                    echo "Services Selected to Build & Test: ${env.SERVICES_TO_BUILD}"
-                    echo "Maven Project List (-pl): ${env.MAVEN_PROJECT_LIST}"
+                    echo "Services Detected to Process: ${env.SERVICES_TO_BUILD}"
                 }
             }
         }
 
-        stage('4. Optimized Maven Build') {
+        stage('4. Maven Build') {
             steps {
                 container('maven') {
-                    echo "=== CI: Executing Targeted Maven Compile (-pl & -am) ==="
+                    echo "=== CI: Executing Maven Compile (-pl ${env.MAVEN_PROJECT_LIST} -am) ==="
                     script {
-                        // Only compile changed microservices and their required dependencies
                         sh "mvn clean compile -pl ${env.MAVEN_PROJECT_LIST} -am -DskipTests=true -Denv=test"
                     }
                 }
             }
         }
 
-        stage('5. Targeted Unit Test') {
+        stage('5. Unit Test') {
             steps {
                 container('maven') {
-                    echo "=== CI: Running Targeted Unit Tests (-pl & -am) ==="
+                    echo "=== CI: Running Unit Tests (-pl ${env.MAVEN_PROJECT_LIST} -am) ==="
                     script {
-                        // Only test changed microservices and their required dependencies
                         sh "mvn test -pl ${env.MAVEN_PROJECT_LIST} -am -Dmaven.test.failure.ignore=false -Denv=test"
                     }
                 }
@@ -207,7 +208,7 @@ spec:
             }
         }
 
-        stage('10. Push Immutable Image to ECR') {
+        stage('10. Push Image to ECR') {
             steps {
                 container('docker') {
                     script {
@@ -232,10 +233,7 @@ spec:
             steps {
                 echo "=== CD: Explicit Image Tag Configuration ==="
                 script {
-                    echo "Preparing Immutable Target Image Tag for Deployment:"
-                    echo "IMAGE_TAG = ${env.IMAGE_TAG}"
-                    echo "ECR_REGISTRY = ${ECR_REGISTRY}"
-                    
+                    echo "Target Deployment Image Tag: IMAGE_TAG = ${env.IMAGE_TAG}"
                     def services = env.SERVICES_TO_BUILD.split(',')
                     for (svc in services) {
                         echo "Target Deployment Image: ${ECR_REGISTRY}/speshway-test-${svc}:${env.IMAGE_TAG}"
