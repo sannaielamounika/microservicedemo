@@ -13,8 +13,8 @@ aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
 kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret generic crm-db-secret \
-  --from-literal=DB_USER=postgres \
-  --from-literal=DB_PASSWORD=postgres \
+  --from-literal=DB_USER=crm_admin \
+  --from-literal='DB_PASSWORD=FbH(L29w]1t*L<Zy(T|->Uv1!8E2' \
   -n "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
 IFS=',' read -ra SERVICES <<< "$SERVICES_LIST"

@@ -78,5 +78,5 @@ services:
 
 database:
   host: speshway-test-db.csvgs6qicu7c.us-east-1.rds.amazonaws.com
-  port: 5432
-  name: speshway
+  port: 3306
+  name: tenantcrm
