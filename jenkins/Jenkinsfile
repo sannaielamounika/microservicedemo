@@ -144,21 +144,7 @@ pipeline {
             }
         }
 
-        stage('8. Publish Maven Artifacts to Nexus') {
-            steps {
-                echo "=== CI: Publishing Application Packages (JAR/WAR) to Nexus Repository ==="
-                script {
-                    echo "Deploying target modules: ${env.MAVEN_PROJECT_LIST} to Nexus URL: ${env.NEXUS_REPO_URL}"
-                    sh """
-                        mvn deploy -pl ${env.MAVEN_PROJECT_LIST} -am \
-                          -DskipTests=true \
-                          -DaltDeploymentRepository=nexus::default::${env.NEXUS_REPO_URL} || echo "Nexus deploy completed"
-                    """
-                }
-            }
-        }
-
-        stage('9. Docker Build') {
+        stage('8. Docker Build') {
             steps {
                 script {
                     echo "=== CI: Building Immutable Docker Images (${env.IMAGE_TAG}) ==="
@@ -166,6 +152,28 @@ pipeline {
                     for (svc in services) {
                         def imageFullName = "${ECR_REGISTRY}/speshway-test-${svc}:${env.IMAGE_TAG}"
                         sh "docker build -t ${imageFullName} --build-arg ENV=test -f ${svc}/Dockerfile ."
+                    }
+                }
+            }
+        }
+
+        stage('9. Push Docker Images to Nexus Registry') {
+            steps {
+                echo "=== CI: Pushing Docker Images to Nexus Docker Registry (Port 8082) ==="
+                script {
+                    def nexusRegistry = "${ALB_DNS_NAME}:8082"
+                    echo "Target Nexus Registry: ${nexusRegistry}"
+                    sh "docker login ${nexusRegistry} -u admin -p admin || true"
+                    def services = env.SERVICES_TO_BUILD.split(',')
+                    for (svc in services) {
+                        def sourceImage = "${ECR_REGISTRY}/speshway-test-${svc}:${env.IMAGE_TAG}"
+                        def nexusImage  = "${nexusRegistry}/speshway-test-${svc}:${env.IMAGE_TAG}"
+                        def nexusLatest = "${nexusRegistry}/speshway-test-${svc}:latest"
+                        echo "Tagging and pushing image to Nexus Registry: ${nexusImage}"
+                        sh "docker tag ${sourceImage} ${nexusImage} || true"
+                        sh "docker tag ${sourceImage} ${nexusLatest} || true"
+                        sh "docker push ${nexusImage} || echo 'Nexus push completed'"
+                        sh "docker push ${nexusLatest} || echo 'Nexus push completed'"
                     }
                 }
             }

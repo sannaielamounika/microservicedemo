@@ -17,14 +17,19 @@ IFS=',' read -ra SERVICES <<< "$SERVICES_LIST"
 for svc in "${SERVICES[@]}"; do
   echo "=== Upgrading Helm Chart for ${svc} in namespace ${K8S_NAMESPACE} ==="
   
-  CHART_PATH="./helm/${svc}"
-  VALUES_FILE="./helm/${svc}/values-test.yaml"
-  
-  if [ ! -d "$CHART_PATH" ]; then
+  if [ -d "./helm/${svc}" ]; then
+    CHART_PATH="./helm/${svc}"
+  elif [ -d "./helm/crm" ]; then
+    CHART_PATH="./helm/crm"
+  else
     CHART_PATH="./helm"
   fi
 
-  if [ ! -f "$VALUES_FILE" ]; then
+  if [ -f "./helm/${svc}/values-test.yaml" ]; then
+    VALUES_FILE="./helm/${svc}/values-test.yaml"
+  elif [ -f "./helm/crm/values-test.yaml" ]; then
+    VALUES_FILE="./helm/crm/values-test.yaml"
+  else
     VALUES_FILE="jenkins/values-test.yaml"
   fi
 
