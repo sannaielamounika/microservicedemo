@@ -19,36 +19,23 @@ kubectl create secret generic crm-db-secret \
 
 IFS=',' read -ra SERVICES <<< "$SERVICES_LIST"
 
+HELM_SET_ARGS=("--set" "global.imageRegistry=${ECR_REGISTRY}" "--set" "environment=test")
+
 for svc in "${SERVICES[@]}"; do
-  echo "=== Upgrading Helm Chart for ${svc} in namespace ${K8S_NAMESPACE} ==="
-  
-  if [ -d "./helm/${svc}" ]; then
-    CHART_PATH="./helm/${svc}"
-  elif [ -d "./helm/crm" ]; then
-    CHART_PATH="./helm/crm"
-  else
-    CHART_PATH="./helm"
-  fi
-
-  if [ -f "./helm/${svc}/values-test.yaml" ]; then
-    VALUES_FILE="./helm/${svc}/values-test.yaml"
-  elif [ -f "./helm/crm/values-test.yaml" ]; then
-    VALUES_FILE="./helm/crm/values-test.yaml"
-  else
-    VALUES_FILE="jenkins/values-test.yaml"
-  fi
-
   SVC_KEY="${svc%-service}"
-
-  helm upgrade --install "${svc}" "${CHART_PATH}" \
-    --namespace "${K8S_NAMESPACE}" \
-    --set global.imageRegistry="${ECR_REGISTRY}" \
-    --set services.${SVC_KEY}.image="speshway-test-${svc}" \
-    --set services.${SVC_KEY}.tag="${IMAGE_TAG}" \
-    --set image.repository="${ECR_REGISTRY}/speshway-test-${svc}" \
-    --set image.tag="${IMAGE_TAG}" \
-    --set environment=test \
-    -f "${VALUES_FILE}"
+  HELM_SET_ARGS+=("--set" "services.${SVC_KEY}.image=speshway-test-${svc}")
+  HELM_SET_ARGS+=("--set" "services.${SVC_KEY}.tag=${IMAGE_TAG}")
 done
+
+VALUES_FILE="jenkins/values-test.yaml"
+if [ -f "./helm/crm/values-test.yaml" ]; then
+  VALUES_FILE="./helm/crm/values-test.yaml"
+fi
+
+echo "=== Upgrading Helm Chart 'crm' in namespace ${K8S_NAMESPACE} ==="
+helm upgrade --install crm ./helm/crm \
+  --namespace "${K8S_NAMESPACE}" \
+  "${HELM_SET_ARGS[@]}" \
+  -f "${VALUES_FILE}"
 
 echo "Helm deployment completed successfully."
