@@ -22,9 +22,9 @@ pipeline {
         ECR_REGISTRY        = "475345973578.dkr.ecr.us-east-1.amazonaws.com"
         EKS_CLUSTER_NAME    = 'speshway-test-eks'
         K8S_NAMESPACE       = 'test'
-        SONAR_HOST_URL      = 'http://10.120.1.115:9000'
+        SONAR_HOST_URL      = 'http://10.120.1.36:9000'
         NEXUS_PORT          = '8081'
-        ALB_DNS_NAME        = 'test-platform-alb-1457967557.us-east-1.elb.amazonaws.com'
+        ALB_DNS_NAME        = 'test-platform-alb-1777713756.us-east-1.elb.amazonaws.com'
         NEXUS_REPO_URL      = "http://${ALB_DNS_NAME}:${NEXUS_PORT}/repository/maven-releases/"
     }
 
