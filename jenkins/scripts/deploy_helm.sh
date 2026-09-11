@@ -12,6 +12,11 @@ echo "=== Updating kubeconfig for EKS Cluster: ${EKS_CLUSTER_NAME} in ${AWS_REGI
 aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
 kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
+kubectl create secret generic crm-db-secret \
+  --from-literal=DB_USER=postgres \
+  --from-literal=DB_PASSWORD=postgres \
+  -n "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+
 IFS=',' read -ra SERVICES <<< "$SERVICES_LIST"
 
 for svc in "${SERVICES[@]}"; do
@@ -38,9 +43,7 @@ for svc in "${SERVICES[@]}"; do
     --set image.repository="${ECR_REGISTRY}/speshway-test-${svc}" \
     --set image.tag="${IMAGE_TAG}" \
     --set environment=test \
-    -f "${VALUES_FILE}" \
-    --wait \
-    --timeout 5m
+    -f "${VALUES_FILE}"
 done
 
 echo "Helm deployment completed successfully."
