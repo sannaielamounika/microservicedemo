@@ -23,7 +23,7 @@ for file in $CHANGED_FILES; do
 done
 
 if [ ${#SERVICES_TO_BUILD[@]} -eq 0 ]; then
-  echo "auth-service,user-service"
+  echo "auth-service,gateway-service,user-service,admin-service,employee-service,customer-service,hr-service,task-service"
 else
   IFS=','
   echo "${SERVICES_TO_BUILD[*]}"
