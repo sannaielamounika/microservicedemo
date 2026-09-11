@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $service.name }}
-  namespace: {{ $service.namespace }}
   labels:
     app: {{ $service.name }}
 spec:

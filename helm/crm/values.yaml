@@ -77,6 +77,6 @@ services:
     serviceType: ClusterIP
 
 database:
-  host: crm-qa-speshway-qa-db.c9o0iwiqig5w.ap-south-1.rds.amazonaws.com
-  port: 3306
+  host: speshway-test-db.csvgs6qicu7c.us-east-1.rds.amazonaws.com
+  port: 5432
   name: speshway

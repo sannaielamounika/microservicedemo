@@ -38,8 +38,13 @@ for svc in "${SERVICES[@]}"; do
     VALUES_FILE="jenkins/values-test.yaml"
   fi
 
+  SVC_KEY="${svc%-service}"
+
   helm upgrade --install "${svc}" "${CHART_PATH}" \
     --namespace "${K8S_NAMESPACE}" \
+    --set global.imageRegistry="${ECR_REGISTRY}" \
+    --set services.${SVC_KEY}.image="speshway-test-${svc}" \
+    --set services.${SVC_KEY}.tag="${IMAGE_TAG}" \
     --set image.repository="${ECR_REGISTRY}/speshway-test-${svc}" \
     --set image.tag="${IMAGE_TAG}" \
     --set environment=test \
