@@ -13,7 +13,12 @@ aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
 kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
 DB_USER_VAL="${CRM_DB_USER:-crm_admin}"
-DB_PASS_VAL="${CRM_DB_PASSWORD:-FbH(L29w]1t*L<Zy(T|->Uv1!8E2}"
+DB_PASS_VAL="${CRM_DB_PASSWORD}"
+
+if [ -z "$DB_PASS_VAL" ]; then
+  echo "Error: CRM_DB_PASSWORD environment variable is not set. Please ensure 'db-secret' credential exists in Jenkins."
+  exit 1
+fi
 
 echo "=== Ensuring Kubernetes Secret crm-db-secret in namespace ${K8S_NAMESPACE} ==="
 kubectl create secret generic crm-db-secret \

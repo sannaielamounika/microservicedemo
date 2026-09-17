@@ -117,7 +117,7 @@ pipeline {
             steps {
                 echo "=== CI: Running SonarQube Static Code Analysis ==="
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'sonarqube-credentials', usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_PASSWORD')]) {
+                    withCredentials([usernamePassword(credentialsId: 'sonar-cred', usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_PASSWORD')]) {
                         sh """
                             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.2217:sonar \
                               -Dsonar.host.url=\${SONAR_HOST_URL} \
@@ -169,7 +169,7 @@ pipeline {
                 script {
                     def nexusRegistry = "${ALB_DNS_NAME}:8082"
                     echo "Target Nexus Registry: ${nexusRegistry}"
-                    withCredentials([usernamePassword(credentialsId: 'nexus-credentials', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASSWORD')]) {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-cred', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASSWORD')]) {
                         sh "docker login ${nexusRegistry} -u \${NEXUS_USER} -p \${NEXUS_PASSWORD} || true"
                     }
                     def services = env.SERVICES_TO_BUILD.split(',')
@@ -238,7 +238,7 @@ pipeline {
                 script {
                     echo "=== CD: Deploying Immutable Image Tag via Helm to Test EKS ==="
                     sh 'chmod +x jenkins/scripts/deploy_helm.sh'
-                    withCredentials([usernamePassword(credentialsId: 'crm-db-credentials', usernameVariable: 'CRM_DB_USER', passwordVariable: 'CRM_DB_PASSWORD')]) {
+                    withCredentials([usernamePassword(credentialsId: 'db-secret', usernameVariable: 'CRM_DB_USER', passwordVariable: 'CRM_DB_PASSWORD')]) {
                         sh "jenkins/scripts/deploy_helm.sh ${AWS_REGION} ${EKS_CLUSTER_NAME} ${K8S_NAMESPACE} ${ECR_REGISTRY} ${env.IMAGE_TAG} \"${env.SERVICES_TO_BUILD}\""
                     }
                 }
