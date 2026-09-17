@@ -121,6 +121,7 @@ pipeline {
                         sh """
                             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
                               -Dsonar.host.url=\${SONAR_HOST_URL} \
+                              -Dsonar.token=\${SONAR_PASSWORD} \
                               -Dsonar.login=\${SONAR_USER} \
                               -Dsonar.password=\${SONAR_PASSWORD} \
                               -Dsonar.projectKey=speshway-microservicedemo \
