@@ -22,10 +22,7 @@ pipeline {
         ECR_REGISTRY        = "475345973578.dkr.ecr.us-east-1.amazonaws.com"
         EKS_CLUSTER_NAME    = 'speshway-test-eks'
         K8S_NAMESPACE       = 'test'
-        SONAR_HOST_URL      = 'http://test-platform-alb-106162229.us-east-1.elb.amazonaws.com:9000'
         NEXUS_PORT          = '8081'
-        ALB_DNS_NAME        = 'test-platform-alb-106162229.us-east-1.elb.amazonaws.com'
-        NEXUS_REPO_URL      = "http://${ALB_DNS_NAME}:${NEXUS_PORT}/repository/maven-releases/"
     }
 
     options {
@@ -49,6 +46,14 @@ pipeline {
                     env.GIT_COMMIT_SHORT = commitSha
                     env.IMAGE_TAG = "test-${env.BUILD_NUMBER}-${commitSha}"
                     echo "Successfully Generated Dynamic IMAGE_TAG: ${env.IMAGE_TAG}"
+
+                    // Dynamically discover active Platform ALB DNS name from AWS
+                    def albDns = sh(script: 'aws elbv2 describe-load-balancers --region us-east-1 --query "LoadBalancers[?contains(LoadBalancerName, \'platform\')].DNSName | [0]" --output text', returnStdout: true).trim()
+                    env.ALB_DNS_NAME   = albDns
+                    env.SONAR_HOST_URL = "http://${albDns}:9000"
+                    env.NEXUS_REPO_URL = "http://${albDns}:${env.NEXUS_PORT}/repository/maven-releases/"
+                    echo "Dynamically Discovered ALB DNS Name: ${env.ALB_DNS_NAME}"
+                    echo "Dynamically Configured SonarQube URL: ${env.SONAR_HOST_URL}"
                 }
             }
         }
