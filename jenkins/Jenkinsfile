@@ -119,7 +119,7 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'sonar-cred', usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_PASSWORD')]) {
                         sh """
-                            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.2217:sonar \
+                            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
                               -Dsonar.host.url=\${SONAR_HOST_URL} \
                               -Dsonar.login=\${SONAR_USER} \
                               -Dsonar.password=\${SONAR_PASSWORD} \
