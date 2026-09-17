@@ -12,9 +12,13 @@ echo "=== Updating kubeconfig for EKS Cluster: ${EKS_CLUSTER_NAME} in ${AWS_REGI
 aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
 kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
+DB_USER_VAL="${CRM_DB_USER:-crm_admin}"
+DB_PASS_VAL="${CRM_DB_PASSWORD:-FbH(L29w]1t*L<Zy(T|->Uv1!8E2}"
+
+echo "=== Ensuring Kubernetes Secret crm-db-secret in namespace ${K8S_NAMESPACE} ==="
 kubectl create secret generic crm-db-secret \
-  --from-literal=DB_USER=crm_admin \
-  --from-literal='DB_PASSWORD=FbH(L29w]1t*L<Zy(T|->Uv1!8E2' \
+  --from-literal=DB_USER="${DB_USER_VAL}" \
+  --from-literal=DB_PASSWORD="${DB_PASS_VAL}" \
   -n "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
 IFS=',' read -ra SERVICES <<< "$SERVICES_LIST"
