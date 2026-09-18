@@ -122,13 +122,11 @@ pipeline {
             steps {
                 echo "=== CI: Running SonarQube Static Code Analysis ==="
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'sonar-cred', usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_PASSWORD')]) {
+                    withCredentials([string(credentialsId: 'sonar-cred', variable: 'SONAR_TOKEN')]) {
                         sh """
                             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
                               -Dsonar.host.url=\${SONAR_HOST_URL} \
-                              -Dsonar.token=\${SONAR_PASSWORD} \
-                              -Dsonar.login=\${SONAR_USER} \
-                              -Dsonar.password=\${SONAR_PASSWORD} \
+                              -Dsonar.token=\${SONAR_TOKEN} \
                               -Dsonar.projectKey=speshway-microservicedemo \
                               -Dsonar.projectName="Speshway Microservices Demo" || true
                         """
