@@ -128,7 +128,7 @@ pipeline {
                               -Dsonar.host.url=\${SONAR_HOST_URL} \
                               -Dsonar.token=\${SONAR_TOKEN} \
                               -Dsonar.projectKey=speshway-microservicedemo \
-                              -Dsonar.projectName="Speshway Microservices Demo" || true
+                              -Dsonar.projectName="Speshway Microservices Demo"
                         """
                     }
                 }
