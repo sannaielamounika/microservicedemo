@@ -14,5 +14,8 @@ spec:
       protocol: TCP
       port: {{ $service.port }}
       targetPort: http
+      {{- if $service.nodePort }}
+      nodePort: {{ $service.nodePort }}
+      {{- end }}
 ---
 {{- end }}

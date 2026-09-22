@@ -20,7 +20,8 @@ services:
     tag: qa-001
     port: 8080
     replicas: 1
-    serviceType: ClusterIP
+    serviceType: NodePort
+    nodePort: 32018
 
   user:
     name: user-service
