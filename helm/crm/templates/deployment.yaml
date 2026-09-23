@@ -33,6 +33,18 @@ spec:
             - name: DB_NAME
               value: {{ $.Values.database.name | quote }}
 
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: crm-db-secret
+                  key: DB_USER
+
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: crm-db-secret
+                  key: DB_PASSWORD
+
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
