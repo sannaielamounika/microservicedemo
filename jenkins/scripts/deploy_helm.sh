@@ -38,13 +38,16 @@ for svc in "${SERVICES[@]}"; do
   HELM_SET_ARGS+=("--set" "services.${SVC_KEY}.tag=${IMAGE_TAG}")
 done
 
-VALUES_FILE="jenkins/values-test.yaml"
-if [ -f "./helm/crm/values-test.yaml" ]; then
-  VALUES_FILE="./helm/crm/values-test.yaml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+VALUES_FILE="${REPO_DIR}/jenkins/values-test.yaml"
+if [ -f "${REPO_DIR}/helm/crm/values-test.yaml" ]; then
+  VALUES_FILE="${REPO_DIR}/helm/crm/values-test.yaml"
 fi
 
 echo "=== Upgrading Helm Chart 'crm' in namespace ${K8S_NAMESPACE} ==="
-helm upgrade --install crm ./helm/crm \
+helm upgrade --install crm "${REPO_DIR}/helm/crm" \
   --namespace "${K8S_NAMESPACE}" \
   "${HELM_SET_ARGS[@]}" \
   -f "${VALUES_FILE}"
