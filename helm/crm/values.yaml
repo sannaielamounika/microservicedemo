@@ -1,5 +1,5 @@
 global:
-  imageRegistry: 058233700821.dkr.ecr.ap-south-1.amazonaws.com
+  imageRegistry: 475345973578.dkr.ecr.us-east-1.amazonaws.com
   imagePullPolicy: IfNotPresent
 
 services:
@@ -7,8 +7,8 @@ services:
   auth:
     name: auth-service
     namespace: auth
-    image: auth-service
-    tag: qa-001
+    image: speshway-test-auth-service
+    tag: test-5-1529afd3
     port: 8081
     replicas: 1
     serviceType: ClusterIP
@@ -16,8 +16,8 @@ services:
   gateway:
     name: gateway-service
     namespace: gateway
-    image: gateway-service
-    tag: qa-001
+    image: speshway-test-gateway-service
+    tag: test-5-1529afd3
     port: 8080
     replicas: 1
     serviceType: NodePort
@@ -26,8 +26,8 @@ services:
   user:
     name: user-service
     namespace: user
-    image: user-service
-    tag: qa-001
+    image: speshway-test-user-service
+    tag: test-5-1529afd3
     port: 8082
     replicas: 1
     serviceType: ClusterIP
@@ -35,8 +35,8 @@ services:
   admin:
     name: admin-service
     namespace: admin
-    image: admin-service
-    tag: qa-001
+    image: speshway-test-admin-service
+    tag: test-5-1529afd3
     port: 8082
     replicas: 1
     serviceType: ClusterIP
@@ -44,8 +44,8 @@ services:
   employee:
     name: employee-service
     namespace: employee
-    image: employee-service
-    tag: qa-001
+    image: speshway-test-employee-service
+    tag: test-5-1529afd3
     port: 8083
     replicas: 1
     serviceType: ClusterIP
@@ -53,8 +53,8 @@ services:
   customer:
     name: customer-service
     namespace: customer
-    image: customer-service
-    tag: qa-001
+    image: speshway-test-customer-service
+    tag: test-5-1529afd3
     port: 8084
     replicas: 1
     serviceType: ClusterIP
@@ -62,8 +62,8 @@ services:
   hr:
     name: hr-service
     namespace: hr
-    image: hr-service
-    tag: qa-001
+    image: speshway-test-hr-service
+    tag: test-5-1529afd3
     port: 8085
     replicas: 1
     serviceType: ClusterIP
@@ -71,8 +71,8 @@ services:
   task:
     name: task-service
     namespace: task
-    image: task-service
-    tag: qa-001
+    image: speshway-test-task-service
+    tag: test-5-1529afd3
     port: 8089
     replicas: 1
     serviceType: ClusterIP
