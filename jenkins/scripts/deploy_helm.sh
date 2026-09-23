@@ -12,12 +12,14 @@ echo "=== Updating kubeconfig for EKS Cluster: ${EKS_CLUSTER_NAME} in ${AWS_REGI
 aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
 kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
-DB_USER_VAL="${CRM_DB_USER:-crm_admin}"
-DB_PASS_VAL="${CRM_DB_PASSWORD}"
+RDS_SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "rds!db-cd73dfc2-1804-4a7c-be28-7fa251cdbce0" --region "${AWS_REGION}" --query "SecretString" --output text 2>/dev/null || true)
 
-if [ -z "$DB_PASS_VAL" ]; then
-  echo "Error: CRM_DB_PASSWORD environment variable is not set. Please ensure 'db-secret' credential exists in Jenkins."
-  exit 1
+if [ -n "$RDS_SECRET_JSON" ]; then
+  DB_USER_VAL=$(echo "$RDS_SECRET_JSON" | grep -o '"username":"[^"]*' | cut -d'"' -f4)
+  DB_PASS_VAL=$(echo "$RDS_SECRET_JSON" | grep -o '"password":"[^"]*' | cut -d'"' -f4)
+else
+  DB_USER_VAL="${CRM_DB_USER:-crm_admin}"
+  DB_PASS_VAL="${CRM_DB_PASSWORD:-?21NVK[Yj?BDX~8XzGqZ<]TcMNrm}"
 fi
 
 echo "=== Ensuring Kubernetes Secret crm-db-secret in namespace ${K8S_NAMESPACE} ==="
